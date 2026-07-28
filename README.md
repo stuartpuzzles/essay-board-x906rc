@@ -13,9 +13,24 @@ A private, single-page kanban board for listening to draft essays and leaving fe
   essay, saved locally in the browser (`localStorage` — nothing leaves your phone).
 - Once feedback is saved, a **"Copy Dispatch Prompt"** button builds a ready-to-paste prompt with
   the essay name and your feedback, so you can hand it straight to Claude mobile to apply.
-- Currently loaded with the first 5 essays (posts 21, 22, 23, 24, 27 from
-  `04-writeups/unlock-cross-game-essay/posts/` — the ones the critique file scored strongest).
-  Add more by editing the `ESSAYS` array at the top of the `<script>` block in `index.html`.
+- A header-level **"Copy All Feedback as Dispatch Prompt"** button bundles every card that has
+  feedback saved into one prompt, mapped back to its correct source file — use this at the end
+  of a session instead of firing one dispatch per card.
+- Currently loaded with 19 pieces: 5 essays from `04-writeups/unlock-cross-game-essay/posts/`
+  (posts 21, 22, 23, 24, 27 — the ones the critique file scored strongest) plus all 14 posts from
+  `09-podcast-board/BLOG/` (dossiers, syntheses, boardroom pieces). Add more by editing the
+  `ESSAYS` array at the top of the `<script>` block in `index.html`.
+
+## Does anything sync back to your computer automatically?
+
+**No.** Everything on the board — column position, feedback text — lives only in this browser's
+`localStorage`, on whichever device/browser you're using. It does not touch the actual files in
+this repo by itself, and it doesn't sync between your phone and your Mac. That's deliberate (no
+backend, no accounts, nothing to leak), but it means the loop has one manual step: use "Copy
+Dispatch Prompt" (per card) or "Copy All Feedback as Dispatch Prompt" (everything at once), paste
+it into Claude mobile, and dispatch — that's what actually edits the files. Also note
+`localStorage` is per-browser: feedback left in Mobile Safari won't show up if you later open the
+same URL in Chrome or on a different phone.
 
 ## Important honest caveat: screen-off / driving
 
@@ -56,9 +71,23 @@ personal (non-Pro) accounts, so pick an obscure repo name if that matters to you
 5. On your phone, open that URL in Safari/Chrome and use **"Add to Home Screen"** so it opens
    like an app.
 
-## Adding more essays later
+## Adding more content later
 
 Each entry in the `ESSAYS` array needs `id`, `title`, `project`, and `body` (plain text, no
 markdown — the TTS engine will read markdown syntax aloud literally). Fastest way: dispatch
-Claude with *"Add posts [N, N, N] from 04-writeups/unlock-cross-game-essay/posts/ to the ESSAYS
-array in AUDIO_REVIEW_SITE/index.html, stripped of markdown formatting."*
+Claude with *"Add [files] to the ESSAYS array in AUDIO_REVIEW_SITE/index.html, stripped of
+markdown formatting."* `sourcePathFor()` in the script infers the file path from the `project`
+field's prefix (`04-writeups` or `09-podcast-board`) — if you add content from a third project,
+extend that function too, or the dispatch prompts will point at the wrong file.
+
+## Redeploying after content changes
+
+The board's content lives entirely in `index.html`. Any time it changes (like this update, which
+added the 14 podcast BLOG posts), push again to update the live site:
+```
+cd ~/Desktop/234_weekendWarrior/AUDIO_REVIEW_SITE
+git add index.html README.md
+git commit -m "Add podcast BLOG posts"
+git push
+```
+GitHub Pages picks up the change automatically within about a minute — no settings to redo.
