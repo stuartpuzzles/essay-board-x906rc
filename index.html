@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Essay Listening Board</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1e2127;
+    --panel-2: #262a32;
+    --border: #33383f;
+    --text: #e8e8ea;
+    --muted: #9aa0aa;
+    --accent: #6fa8ff;
+    --accent-2: #7fd68a;
+    --warn: #e8b94f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 16px;
+  }
+  header { margin-bottom: 18px; }
+  header h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  header p { color: var(--muted); font-size: 0.85rem; margin: 0; line-height: 1.4; }
+  .board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+  .column {
+    flex: 1 1 0;
+    min-width: 260px;
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 10px;
+    border: 1px solid var(--border);
+  }
+  .column h2 {
+    font-size: 0.95rem;
+    margin: 4px 6px 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .card h3 { font-size: 0.95rem; margin: 0 0 6px; line-height: 1.3; }
+  .card .meta { font-size: 0.72rem; color: var(--muted); margin-bottom: 8px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+  button.good { background: var(--accent-2); color: #0b1220; border-color: var(--accent-2); font-weight: 600; }
+  button:active { opacity: 0.8; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; font-size: 0.8rem; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .status-dot.speaking { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  textarea {
+    width: 100%;
+    min-height: 70px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 8px;
+  }
+  .feedback-text {
+    font-size: 0.82rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+  }
+  .empty { color: var(--muted); font-size: 0.8rem; padding: 8px; font-style: italic; }
+  .toast {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent-2);
+    color: #0b1220;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .voice-warning { background: var(--warn); color: #2a2200; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 12px; display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Essay Listening Board</h1>
+  <p>Private review queue &mdash; tap Play to have your phone read an essay aloud (uses your device's built-in
+  voice, works with the screen off / Bluetooth). Move cards through the columns as you go, and leave feedback
+  after listening. Nothing leaves your phone &mdash; everything's stored locally in this browser.</p>
+</header>
+
+<div class="voice-warning" id="voiceWarning">
+  Text-to-speech isn't available in this browser. Try Safari or Chrome on your phone.
+</div>
+
+<div class="board" id="board">
+  <div class="column" data-status="to-listen">
+    <h2>To Listen</h2>
+    <div class="cards" id="col-to-listen"></div>
+  </div>
+  <div class="column" data-status="listened">
+    <h2>Listened</h2>
+    <div class="cards" id="col-listened"></div>
+  </div>
+  <div class="column" data-status="feedback-given">
+    <h2>Feedback Given</h2>
+    <div class="cards" id="col-feedback-given"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const ESSAYS = [
+  {
+    id: "21-escape-optional-chassis",
+    title: "None of This Box's Three Games Actually Ends in an Escape",
+    project: "04-writeups / box 3",
+    body: `None of This Box's Three Games Actually Ends in an Escape.
+
+Open a box labeled "escape room in a box" and count the escapes. In this box, the honest count is zero. The Adventurers of Oz doesn't end with a door — it ends with Kansas, a journey home, with an optional true ending built on a moral choice rather than an exit. A Noside Story doesn't end with a door either. Tombstone Express doesn't have one at all. Three scenarios, one Unlock! box, zero exits.
+
+Most design essays have to argue a claim like that into existence. This one doesn't have to, because A Noside Story names its own failure to hit genre. Its case file states outright that the actual win condition at the very end is switching on a fax machine and dialing the real-world calendar date to summon outside help — a distress-call ending. Nicholson's roughly seventy percent figure for genuine escape goals is not met here. That's not a design critique reading between the lines. That's the genre's own benchmark, cited by name, and missed by design.
+
+Tombstone Express doesn't even keep the fiction of confinement going. Its stated goal is making the train reach Tombstone while protecting the gem and solving the crime. The narrative goal is not escaping. The escape framing is purely the time pressure of the timer. The word "escape" survives only as a feeling the clock produces, not a thing the story is about.
+
+What stays constant isn't the fiction — it's the chassis underneath it. All three scenarios keep, unchanged, a hard countdown clock, a companion-app hint economy priced per card, and a code-entry validation loop that doesn't care what the code unlocks. That chassis runs identically whether the payoff is arriving in Kansas, phoning for help, or naming a train thief. It has no opinion about the emotional shape of victory — it just times, hints, and validates.
+
+That's the actual finding: chassis and victory-condition are two separate levers, not one bundled convention. A designer building on timer-and-codes infrastructure doesn't have to default to "escape" just because the format was born in escape rooms. The mechanical skeleton and the emotional payoff of winning are independently variable — this box proves it by shipping three different answers to what winning means on the exact same skeleton. One scenario alone could be a fluke. Three for three, in the same retail box, with nobody apparently noticing the genre's own name had quietly stopped applying, is a pattern.
+
+One box, one identical mechanical skeleton — timer, per-card hints, code-entry validation — and three unrelated answers to what winning means: a homecoming built on a moral choice, a distress call to the outside world, a solved crime with a train that arrives on time. Nothing about the chassis required any of those endings, and nothing about escape survived the trip from the box's label to the table.`
+  },
+  {
+    id: "22-reuse-buys-consensus-not-acclaim",
+    title: "Reuse Doesn't Buy Good Reviews — It Buys Protection From the Failure Designers Should Actually Fear",
+    project: "04-writeups / box 3 — strongest post in the set",
+    body: `Reusing a Prop or a Mechanic Doesn't Buy a Game Good Reviews — It Buys It Protection From the One Outcome a Designer Should Actually Fear.
+
+Two designers build a signature move and reuse it four or five times. Both still get ripped apart by reviewers. So did reuse do anything at all?
+
+The Adventurers of Oz built the cleanest signature prop in the corpus, and it didn't stop the split verdict. The Mirror of Truth appears across four stages with escalating transforms — matching, hole-overlay, four-orientation reading, pointer-chains. It's real repetition, deliberately engineered. And Esc Room Addict's own two playtest groups still couldn't agree on the game: one called it intuitive and fair, the other called it frustrating leaps of logic. The case file's own diagnosis explains why — every stage besides the mirror invents a new one-off mechanic, and one-off mechanisms produce high variance in perceived fairness because there's no learned grammar to fall back on.
+
+A Noside Story reused a mechanic instead of a prop, and got split down the middle too. Weighted-Symbol Arithmetic — a card's small corner badge overrides its face value as the combine operand — shows up five times as connective tissue through the back half, the densest single-game use of this mechanic in the corpus to date. Didn't matter. Escape Authority called it maximally fair, every single step is logical, intuitive and clear, five out of five keys. Room Escape Artist called the same game unfair, flagging hidden penalty cards that felt particularly unfair and a confusing hidden number.
+
+Tombstone Express reused nothing — and it's the only game where reviewers converge on the same broken puzzle. Every mechanism here is invented once and discarded. And that's where two strangers, playing independently, land on the identical complaint. Escape Authority calls it the only frustratingly illogical moment. Meeple Mountain, with no contact with that review, separately reports getting penalized on an important puzzle at the same step. Tombstone Express's Fairness score is also the lowest of the two games in this box actually scored on that axis.
+
+Look at what reuse actually did across these three games. It never stopped reviewers from disagreeing — The Adventurers of Oz and A Noside Story both got split verdicts regardless of whether the repeated thing was a prop or a mechanic. What it stopped was different and narrower: no reviewer on either side of those two split verdicts converges with another reviewer on one named, structural defect, the way two independent Tombstone Express reviewers converge on the same broken step. Repetition keeps the complaints small, subjective, and scattered across different reviewers instead of everyone pointing at the same wound. Reuse doesn't buy agreement. It buys scattered disagreement instead of concentrated failure.
+
+That's the real return on investment. Not universal acclaim — taste varies no matter what you build. Insurance against the one failure mode that's actually fatal: an unambiguous, everyone-agrees defect riding all the way to publication because nothing taught players a grammar to fall back on.
+
+Next time you're tempted to invent a fresh mechanic for every stage, ask instead which prop or move could carry your game's back half — then expect persistent, survivable disagreement in the reviews, and count that as the design working.`
+  },
+  {
+    id: "23-curve-measures-card-count",
+    title: "Tombstone Express's Difficulty Curve Is Lying to You About What It's Measuring",
+    project: "04-writeups / box 3",
+    body: `Tombstone Express's Difficulty Curve Is Lying to You About What It's Measuring.
+
+You've seen this shape before: a game rated Medium, with puzzles marked across five acts. Now read what the case file says is actually driving that shape.
+
+The case file confesses before you even have to ask. Tombstone Express's difficulty-curve section calls its own shape an irregular spike — and then explains why in language that should stop you cold: the difficulty isn't intrinsic to any individual puzzle but comes from information management across a large active card set. The cognitive curve is externally generated, by card overload, not designed into the puzzle sequence. That's not a design critique from outside. That's the deconstruction's own diagnosis of its own numbers.
+
+Room Escape Artist reached the same conclusion cold, with no access to the case file. The reviewer never saw this analysis. They just played the game and reported so many cards in play, which was paralyzing. Two independent readings — one internal, one external — land on the identical cause: not the puzzles, the tableau.
+
+Now look at what a curve actually shaped by design intent looks like, in the same box. A Noside Story's spikes are each followed by two to four trivial arithmetic steps, a low-effort palate-cleanser rhythm appropriate to a low-difficulty, comedy-forward scenario. That's a designer choosing when the player rests. The Adventurers of Oz's curve, meanwhile, is scaffolded with a mid-game summit — the hardest puzzle lands deliberately at a showpiece moment, not as an accident of clutter. Both of those curves are describing intent. Tombstone Express's curve is describing furniture.
+
+Which means every Tombstone Express difficulty rating is quietly measuring two different things at once. First-order: the case file admits its own rating scale was never built to isolate card-tableau size as a variable, and that variable contaminated the numbers anyway. Second-order: any single puzzle's difficulty rating is potentially a blend — the actual reasoning load, plus the search-and-recall tax of finding two specific cards among twenty — with nothing in the rating method to separate them. Third-order: this breaks commensurability. A puzzle rated hard in Tombstone Express might be genuinely easy reasoning wearing a card-overload costume, while the other two games' curves are tracking something their designers actually intended you to feel.
+
+Put a mid-difficulty rating from all three games side by side and you're not comparing three puzzles. You're comparing a puzzle, a puzzle, and a search problem wearing a puzzle's rating.
+
+Before you trust a difficulty rating, audit what's on the table. Track the size of the active-item set the player has to search at the time of each puzzle, separately from the puzzle's reasoning load. If that number swings wildly across puzzles in the same game — the way Tombstone Express's does, from a handful of cards early to twenty-plus by the midgame — your difficulty ratings are silently a blend of two variables. The fix isn't a harder or easier puzzle. It's a card-management structure: a discard zone, a state mat, anything that keeps the tableau's size out of the number you're calling difficulty.`
+  },
+  {
+    id: "24-one-bug-three-costumes",
+    title: "Tombstone Express Doesn't Have Three Fairness Bugs — It Has One Bug Wearing Three Costumes",
+    project: "04-writeups / box 3",
+    body: `Tombstone Express Doesn't Have Three Fairness Bugs — It Has One Bug Wearing Three Costumes.
+
+The case file for Unlock! Secret Adventures — Tombstone Express lists three separate fixes, in three separate rows, for three unfair moments. Read them back to back and they stop looking separate.
+
+Start with how the case file frames them: three complaints, filed as three unrelated bugs. At the smoke-signal machine, Tombstone Express hit correct silence — no app feedback when correctly completed, so players revisited the machine repeatedly trying combinations, never knowing they had or hadn't completed this gate. At the finale, entering the accomplice's partial-win code yields a narrative result that reads as a story outcome, not a failure — a fairness trap, since the player receives a plausible-seeming ending that is not the correct resolution. And at that same finale, a wrong accusation is terminal: one shot in normal mode, wrong accusation ends game immediately, no solution path revealed. The case file's "what I'd fix" section proposes three fixes for these three moments: add a success cue, relabel the partial-win text, allow a penalized retry.
+
+Now look at what's actually missing in all three. Not one of these is a puzzle-logic bug. The smoke-signal gate is solvable. The accomplice's code is a legitimate designed outcome. The one-shot rule is a deliberate stakes mechanic. The thing that's broken in all three cases is the same thing: Tombstone Express never tells the player, in-fiction, what state they're currently in. One gate is correct, but unconfirmed. One code is plausible, but wrong. One ending is terminally failed, with nowhere to go. Three different states, and one missing feature in every case — a state-acknowledgment signal, present or absent, whether the outcome is a win, a loss, or a partial.
+
+Patch the symptoms and you'll still get blindsided. Fix the smoke signal with an audio cue, relabel the partial-win string, add a retry rule to the finale — that's three implementation decisions, three separate lines of app logic, three separate playtests to confirm they landed. And the next state transition the designers add — a new partial ending, a new dead-end gate — ships unprotected, because nothing in the fix list names the actual rule that would have caught all three at once: every terminal or near-terminal state must announce its own status. That's a one-line spec, not three bug tickets. It would have caught all three before any of them shipped — and it catches the fourth one nobody's written yet.
+
+The generalized fix is usually cheaper than the sum of the specific ones. Next time your own case file — or your own playtest notes — accumulates more than one "the player didn't know if that worked," don't reach for a punch list. Ask what single state-transition rule, enforced everywhere, would have prevented all of them at once. Write that rule down before you write the patches.`
+  },
+  {
+    id: "27-mirror-image-twist-legible-state",
+    title: "Two Designers Inverted the Same Outcome — and Only One Told Players What Just Happened",
+    project: "04-writeups / box 3",
+    body: `Two Designers Inverted the Same Outcome — and Only One Told Players What Just Happened.
+
+Two different Unlock! teams had the same idea at the same time, from opposite directions, and neither knew it. A Noside Story and Tombstone Express both landed on the same discovery: "correct" and "feels good" don't have to be the same thing. One game bends success into a setback. The other bends failure into something that reads as a win. Same raw material, inverted expectation, pointed in mirror directions — and only one of them tells you which way you just got bent.
+
+In A Noside Story, players correctly solve a hearth-block combine puzzle and get captured for their trouble. Room Escape Artist called it one of the scenario's innovations beyond the usual mechanics of Unlock! It isn't a wrong-answer trap; it's a success-as-setback inversion — you did everything right, and the game answers with a cage. What happens next is the part that matters: a new puzzle shows up immediately, an explicit cage-escape puzzle. No ambiguity, no dead air. The player never has to wonder whether something changed, because something obviously changed — there's a padlock to crack.
+
+Tombstone Express runs the same move in reverse, at its finale. Enter the accomplice's code — not the true culprit — and the game responds with the thief and the jewel vanishing. That's not an error message; it's a story beat. The case file is blunt about what this actually is: a fairness trap — they receive a plausible-seeming ending that is not the correct resolution. And then nothing follows it. No new puzzle, no next screen, no signal that says this wasn't it. The game just ends.
+
+What separates these two isn't the direction of the twist. Both games invert the obvious relationship between doing the right thing and feeling good, and that inversion isn't the risk — twisting the player's expectation is a legitimate, even clever, design move, one of the few things an Unlock! game can do that a plain lock-and-key puzzle can't. The risk sits entirely in what happens in the seconds after the twist lands. A Noside Story hands the player a concrete new problem, proof in the form of a fresh padlock that the state has changed. Tombstone Express hands the player nothing: the same silence a genuine ending would produce. A twist with no follow-up state is mechanically indistinguishable from a trap — identical whiplash, identical surprise, and the only variable separating a plot beat from a cheated player is whether a new puzzle showed up in the next breath.
+
+Put the two endings side by side one last time. The captured player in A Noside Story walks straight into a padlock waiting to be cracked — and that sequence is what Room Escape Artist wrote up as an innovation. The vanished thief and jewel in Tombstone Express walk into nothing at all, no next screen, no padlock, no proof the story kept moving — and that silence is what the case file logs as a fairness trap. An innovation and a fairness trap, sitting on either side of the exact same design decision, separated by nothing but the state the designer built to come after it.`
+  }
+];
+
+const STORE_KEY = "essay-listening-board-v1";
+
+function loadState() {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+function saveState(state) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+
+let state = loadState();
+ESSAYS.forEach(e => {
+  if (!state[e.id]) state[e.id] = { status: "to-listen", feedback: "" };
+});
+saveState(state);
+
+let currentUtterance = null;
+let currentSpeakingId = null;
+
+function speak(essay, rate) {
+  if (!("speechSynthesis" in window)) {
+    document.getElementById("voiceWarning").style.display = "block";
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(essay.body);
+  utter.rate = rate || 1;
+  utter.onstart = () => { currentSpeakingId = essay.id; render(); };
+  utter.onend = () => {
+    currentSpeakingId = null;
+    if (state[essay.id].status === "to-listen") {
+      state[essay.id].status = "listened";
+      saveState(state);
+    }
+    render();
+  };
+  utter.onerror = () => { currentSpeakingId = null; render(); };
+  currentUtterance = utter;
+  window.speechSynthesis.speak(utter);
+}
+
+function stopSpeaking() {
+  window.speechSynthesis.cancel();
+  currentSpeakingId = null;
+  render();
+}
+
+function setStatus(id, status) {
+  state[id].status = status;
+  saveState(state);
+  render();
+}
+
+function saveFeedback(id, text) {
+  state[id].feedback = text;
+  if (text.trim().length > 0) {
+    state[id].status = "feedback-given";
+  }
+  saveState(state);
+  render();
+}
+
+function copyDispatchPrompt(essay) {
+  const fb = state[essay.id].feedback || "(no feedback text saved)";
+  const prompt = `Feedback on essay "${essay.title}" (${essay.id}, ${essay.project}):\n\n${fb}\n\nPlease apply this feedback to the post in 04-writeups/unlock-cross-game-essay/posts/, or file it as a note if it needs a bigger revision.`;
+  navigator.clipboard.writeText(prompt).then(() => {
+    const toast = document.getElementById("toast");
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1500);
+  });
+}
+
+function cardHTML(essay) {
+  const s = state[essay.id];
+  const speaking = currentSpeakingId === essay.id;
+  let html = `<div class="card">
+    <h3>${essay.title}</h3>
+    <div class="meta"><span class="status-dot ${speaking ? "speaking" : ""}"></span>${essay.project}</div>
+    <div class="controls">`;
+
+  if (speaking) {
+    html += `<button onclick="stopSpeaking()">⏸ Stop</button>`;
+  } else {
+    html += `<button class="primary" onclick="speak(ESSAYS.find(e=>e.id==='${essay.id}'), document.getElementById('rate-${essay.id}').value)">▶ Play</button>`;
+    html += `<select id="rate-${essay.id}">
+      <option value="1">1x</option>
+      <option value="1.25">1.25x</option>
+      <option value="1.5" selected>1.5x</option>
+      <option value="1.75">1.75x</option>
+    </select>`;
+  }
+
+  html += `</div>`;
+
+  if (s.status === "to-listen") {
+    html += `<div class="controls"><button onclick="setStatus('${essay.id}','listened')">Mark Listened</button></div>`;
+  }
+
+  if (s.status === "listened" || s.status === "feedback-given") {
+    if (s.status === "listened") {
+      html += `<textarea id="fb-${essay.id}" placeholder="Feedback — type, or tap the mic on your keyboard to dictate...">${s.feedback}</textarea>
+      <div class="controls">
+        <button class="good" onclick="saveFeedback('${essay.id}', document.getElementById('fb-${essay.id}').value)">Save Feedback</button>
+        <button onclick="setStatus('${essay.id}','to-listen')">Back to To Listen</button>
+      </div>`;
+    } else {
+      html += `<div class="feedback-text">${s.feedback}</div>
+      <div class="controls">
+        <button onclick="setStatus('${essay.id}','listened')">Edit Feedback</button>
+        <button class="primary" onclick="copyDispatchPrompt(ESSAYS.find(e=>e.id==='${essay.id}'))">Copy Dispatch Prompt</button>
+      </div>`;
+    }
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function render() {
+  const columns = { "to-listen": [], "listened": [], "feedback-given": [] };
+  ESSAYS.forEach(e => columns[state[e.id].status].push(e));
+
+  Object.keys(columns).forEach(status => {
+    const el = document.getElementById("col-" + status);
+    if (columns[status].length === 0) {
+      el.innerHTML = `<div class="empty">Nothing here yet.</div>`;
+    } else {
+      el.innerHTML = columns[status].map(cardHTML).join("");
+    }
+  });
+}
+
+if (!("speechSynthesis" in window)) {
+  document.getElementById("voiceWarning").style.display = "block";
+}
+
+render();
+</script>
+</body>
+</html>
